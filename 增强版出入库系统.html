@@ -1,0 +1,609 @@
+我将为您创建一个增强版的出入库管理系统HTML页面，添加了可设置单品库存告警数量的功能，并保持原有所有功能。
+
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>出入库管理系统</title>
+    <script src="https://cdn.tailwindcss.com/3.3.3"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.7.2/css/all.min.css">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.9.1/chart.min.js"></script>
+    <style>
+        body {
+            font-family: 'Noto Sans SC', sans-serif;
+            background-color: #f5f7fa;
+        }
+        .glassmorphism {
+            background: rgba(255, 255, 255, 0.8);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.15);
+        }
+        .card-hover {
+            transition: all 0.3s ease;
+        }
+        .card-hover:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 12px 28px 0 rgba(31, 38, 135, 0.2);
+        }
+        .chart-container {
+            height: 300px;
+            width: 100%;
+            position: relative;
+        }
+        .low-stock {
+            background-color: rgba(239, 68, 68, 0.2);
+            color: #dc2626;
+            font-weight: bold;
+        }
+        .highlight-text {
+            position: relative;
+            display: inline-block;
+        }
+        .highlight-text::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 10px;
+            background-color: rgba(99, 102, 241, 0.2);
+            z-index: -1;
+        }
+        .settings-panel {
+            transition: all 0.3s ease;
+            max-height: 0;
+            overflow: hidden;
+        }
+        .settings-panel.active {
+            max-height: 500px;
+            padding: 1rem;
+            margin-top: 1rem;
+        }
+    </style>
+</head>
+<body class="min-h-screen">
+    <!-- 登录模态框 -->
+    <div id="loginModal" class="fixed inset-0 flex items-center justify-center z-50 bg-black bg-opacity-50">
+        <div class="glassmorphism p-8 w-full max-w-md">
+            <h2 class="text-2xl font-bold mb-6 text-center">登录系统</h2>
+            <div class="mb-4">
+                <label class="block text-gray-700 mb-2" for="username">用户名</label>
+                <input type="text" id="username" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <div class="mb-6">
+                <label class="block text-gray-700 mb-2" for="password">密码</label>
+                <input type="password" id="password" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+            </div>
+            <button id="loginBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                登录
+            </button>
+        </div>
+    </div>
+
+    <!-- 主界面 -->
+    <div id="mainContent" class="container mx-auto py-8 px-4 hidden">
+        <div class="flex justify-between items-center mb-8">
+            <h1 class="text-3xl font-bold">出入库管理系统</h1>
+            <div class="flex space-x-4">
+                <button id="settingsBtn" class="bg-yellow-500 text-white px-4 py-2 rounded-lg hover:bg-yellow-600 transition-colors">
+                    <i class="fas fa-cog mr-2"></i>设置
+                </button>
+                <button id="shareBtn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                    <i class="fas fa-share-alt mr-2"></i>分享
+                </button>
+                <button id="logoutBtn" class="bg-gray-500 text-white px-4 py-2 rounded-lg hover:bg-gray-600 transition-colors">
+                    <i class="fas fa-sign-out-alt mr-2"></i>退出
+                </button>
+            </div>
+        </div>
+
+        <!-- 设置面板 -->
+        <div id="settingsPanel" class="glassmorphism settings-panel">
+            <h3 class="text-xl font-bold mb-4">系统设置</h3>
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div>
+                    <h4 class="font-semibold mb-3">库存告警设置</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-700 mb-1">默认库存告警阈值</label>
+                            <input type="number" id="defaultWarningThreshold" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500" value="4">
+                        </div>
+                        <button id="saveSettingsBtn" class="bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-save mr-2"></i>保存设置
+                        </button>
+                    </div>
+                </div>
+                <div>
+                    <h4 class="font-semibold mb-3">单品告警设置</h4>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-gray-700 mb-1">选择产品</label>
+                            <select id="productSelect" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                                <option value="">-- 选择产品 --</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label class="block text-gray-700 mb-1">自定义告警阈值</label>
+                            <input type="number" id="customWarningThreshold" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                        </div>
+                        <button id="saveProductThresholdBtn" class="bg-green-600 text-white py-2 px-4 rounded-lg hover:bg-green-700 transition-colors">
+                            <i class="fas fa-check-circle mr-2"></i>应用设置
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
+            <!-- 数据录入区 -->
+            <div class="glassmorphism p-6 card-hover lg:col-span-1">
+                <h2 class="text-xl font-bold mb-4">产品信息录入</h2>
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-gray-700 mb-1">产品名称</label>
+                        <input type="text" id="productName" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">产品价格(元)</label>
+                        <input type="number" id="productPrice" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">出入库数量</label>
+                        <input type="number" id="productQuantity" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">出厂日期</label>
+                        <input type="date" id="productionDate" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">保质期(天)</label>
+                        <input type="number" id="shelfLife" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="flex space-x-4">
+                        <button id="inBtn" class="flex-1 bg-green-500 text-white py-2 px-4 rounded-lg hover:bg-green-600 transition-colors">
+                            <i class="fas fa-arrow-down mr-2"></i>入库
+                        </button>
+                        <button id="outBtn" class="flex-1 bg-red-500 text-white py-2 px-4 rounded-lg hover:bg-red-600 transition-colors">
+                            <i class="fas fa-arrow-up mr-2"></i>出库
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 报表生成区 -->
+            <div class="glassmorphism p-6 card-hover lg:col-span-2">
+                <h2 class="text-xl font-bold mb-4">报表生成</h2>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                    <div>
+                        <label class="block text-gray-700 mb-1">月销售额(元)</label>
+                        <input type="number" id="monthlySales" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div>
+                        <label class="block text-gray-700 mb-1">月支出(元)</label>
+                        <input type="number" id="monthlyExpenses" class="w-full px-3 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                    </div>
+                    <div class="flex items-end">
+                        <button id="generateReportBtn" class="w-full bg-indigo-600 text-white py-2 px-4 rounded-lg hover:bg-indigo-700 transition-colors">
+                            <i class="fas fa-file-alt mr-2"></i>生成报表
+                        </button>
+                    </div>
+                </div>
+                <div class="chart-container">
+                    <canvas id="reportChart"></canvas>
+                </div>
+                <div class="mt-4 flex space-x-4">
+                    <button id="monthlyReportBtn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors">
+                        <i class="fas fa-calendar-alt mr-2"></i>月报
+                    </button>
+                    <button id="quarterlyReportBtn" class="bg-purple-500 text-white px-4 py-2 rounded-lg hover:bg-purple-600 transition-colors">
+                        <i class="fas fa-calendar mr-2"></i>季报
+                    </button>
+                    <button id="annualReportBtn" class="bg-green-500 text-white px-4 py-2 rounded-lg hover:bg-green-600 transition-colors">
+                        <i class="fas fa-calendar-day mr-2"></i>年报
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 库存查询区 -->
+        <div class="glassmorphism p-6 card-hover mb-8">
+            <h2 class="text-xl font-bold mb-4">库存查询</h2>
+            <div class="flex items-center mb-4">
+                <input type="text" id="searchProduct" placeholder="输入产品名称查询" class="flex-1 px-3 py-2 border rounded-l-lg focus:outline-none focus:ring-2 focus:ring-indigo-500">
+                <button id="searchBtn" class="bg-indigo-600 text-white px-4 py-2 rounded-r-lg hover:bg-indigo-700 transition-colors">
+                    <i class="fas fa-search mr-2"></i>查询
+                </button>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white rounded-lg overflow-hidden">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="py-2 px-4 text-left">产品名称</th>
+                            <th class="py-2 px-4 text-left">单价(元)</th>
+                            <th class="py-2 px-4 text-left">库存数量</th>
+                            <th class="py-2 px-4 text-left">出厂日期</th>
+                            <th class="py-2 px-4 text-left">保质期至</th>
+                            <th class="py-2 px-4 text-left">状态</th>
+                            <th class="py-2 px-4 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="inventoryTable" class="divide-y divide-gray-200">
+                        <!-- 动态生成库存数据 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 库存预警区 -->
+        <div class="glassmorphism p-6 card-hover">
+            <h2 class="text-xl font-bold mb-4">库存预警 <span id="warningThresholdText" class="text-sm font-normal text-gray-500">(库存低于4件)</span></h2>
+            <div class="overflow-x-auto">
+                <table class="min-w-full bg-white rounded-lg overflow-hidden">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="py-2 px-4 text-left">产品名称</th>
+                            <th class="py-2 px-4 text-left">当前库存</th>
+                            <th class="py-2 px-4 text-left">告警阈值</th>
+                            <th class="py-2 px-4 text-left">建议补货量</th>
+                            <th class="py-2 px-4 text-left">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="warningTable" class="divide-y divide-gray-200">
+                        <!-- 动态生成预警数据 -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // 模拟数据库
+        let inventoryData = [
+            { id: 1, name: "矿泉水", price: 2.5, quantity: 10, productionDate: "2024-01-01", shelfLife: 365, warningThreshold: 4 },
+            { id: 2, name: "方便面", price: 5, quantity: 3, productionDate: "2024-02-15", shelfLife: 180, warningThreshold: 4 },
+            { id: 3, name: "巧克力", price: 12, quantity: 8, productionDate: "2024-03-10", shelfLife: 270, warningThreshold: 4 },
+            { id: 4, name: "饼干", price: 8, quantity: 2, productionDate: "2024-04-05", shelfLife: 240, warningThreshold: 4 },
+            { id: 5, name: "饮料", price: 4, quantity: 15, productionDate: "2024-05-20", shelfLife: 360, warningThreshold: 4 }
+        ];
+
+        // 系统设置
+        let systemSettings = {
+            defaultWarningThreshold: 4
+        };
+
+        // 登录功能
+        document.addEventListener('DOMContentLoaded', function() {
+            const loginModal = document.getElementById('loginModal');
+            const mainContent = document.getElementById('mainContent');
+            const loginBtn = document.getElementById('loginBtn');
+            const logoutBtn = document.getElementById('logoutBtn');
+            const settingsBtn = document.getElementById('settingsBtn');
+            const settingsPanel = document.getElementById('settingsPanel');
+            
+            // 显示登录模态框
+            loginModal.classList.remove('hidden');
+            
+            // 登录验证
+            loginBtn.addEventListener('click', function() {
+                const username = document.getElementById('username').value;
+                const password = document.getElementById('password').value;
+                
+                if (username === '123456' && password === '123456') {
+                    loginModal.classList.add('hidden');
+                    mainContent.classList.remove('hidden');
+                    renderInventoryTable();
+                    renderWarningTable();
+                    updateProductSelect();
+                } else {
+                    alert('用户名或密码错误！');
+                }
+            });
+            
+            // 退出登录
+            logoutBtn.addEventListener('click', function() {
+                loginModal.classList.remove('hidden');
+                mainContent.classList.add('hidden');
+                document.getElementById('username').value = '';
+                document.getElementById('password').value = '';
+            });
+            
+            // 设置面板切换
+            settingsBtn.addEventListener('click', function() {
+                settingsPanel.classList.toggle('active');
+                updateProductSelect();
+            });
+            
+            // 保存系统设置
+            document.getElementById('saveSettingsBtn').addEventListener('click', function() {
+                systemSettings.defaultWarningThreshold = parseInt(document.getElementById('defaultWarningThreshold').value);
+                alert('系统设置已保存！');
+                updateWarningThresholdText();
+                renderWarningTable();
+            });
+            
+            // 保存产品告警阈值
+            document.getElementById('saveProductThresholdBtn').addEventListener('click', function() {
+                const productId = parseInt(document.getElementById('productSelect').value);
+                const threshold = parseInt(document.getElementById('customWarningThreshold').value);
+                
+                if (isNaN(productId) || isNaN(threshold)) {
+                    alert('请选择产品并输入有效的告警阈值！');
+                    return;
+                }
+                
+                const product = inventoryData.find(item => item.id === productId);
+                if (product) {
+                    product.warningThreshold = threshold;
+                    alert(`已为产品"${product.name}"设置告警阈值为${threshold}`);
+                    renderWarningTable();
+                }
+            });
+            
+            // 入库功能
+            document.getElementById('inBtn').addEventListener('click', function() {
+                const name = document.getElementById('productName').value;
+                const price = parseFloat(document.getElementById('productPrice').value);
+                const quantity = parseInt(document.getElementById('productQuantity').value);
+                const productionDate = document.getElementById('productionDate').value;
+                const shelfLife = parseInt(document.getElementById('shelfLife').value);
+                
+                if (!name || isNaN(price) || isNaN(quantity) || !productionDate || isNaN(shelfLife)) {
+                    alert('请填写完整的产品信息！');
+                    return;
+                }
+                
+                // 检查产品是否已存在
+                const existingProduct = inventoryData.find(item => item.name === name);
+                if (existingProduct) {
+                    existingProduct.quantity += quantity;
+                } else {
+                    inventoryData.push({
+                        id: inventoryData.length + 1,
+                        name,
+                        price,
+                        quantity,
+                        productionDate,
+                        shelfLife,
+                        warningThreshold: systemSettings.defaultWarningThreshold
+                    });
+                }
+                
+                // 清空表单
+                document.getElementById('productName').value = '';
+                document.getElementById('productPrice').value = '';
+                document.getElementById('productQuantity').value = '';
+                document.getElementById('productionDate').value = '';
+                document.getElementById('shelfLife').value = '';
+                
+                renderInventoryTable();
+                renderWarningTable();
+                updateProductSelect();
+                alert('入库成功！');
+            });
+            
+            // 出库功能
+            document.getElementById('outBtn').addEventListener('click', function() {
+                const name = document.getElementById('productName').value;
+                const quantity = parseInt(document.getElementById('productQuantity').value);
+                
+                if (!name || isNaN(quantity)) {
+                    alert('请填写完整的产品信息！');
+                    return;
+                }
+                
+                const existingProduct = inventoryData.find(item => item.name === name);
+                if (!existingProduct) {
+                    alert('该产品不存在！');
+                    return;
+                }
+                
+                if (existingProduct.quantity < quantity) {
+                    alert('库存不足！');
+                    return;
+                }
+                
+                existingProduct.quantity -= quantity;
+                
+                // 清空表单
+                document.getElementById('productName').value = '';
+                document.getElementById('productPrice').value = '';
+                document.getElementById('productQuantity').value = '';
+                document.getElementById('productionDate').value = '';
+                document.getElementById('shelfLife').value = '';
+                
+                renderInventoryTable();
+                renderWarningTable();
+                alert('出库成功！');
+            });
+            
+            // 搜索功能
+            document.getElementById('searchBtn').addEventListener('click', function() {
+                const searchTerm = document.getElementById('searchProduct').value.toLowerCase();
+                if (!searchTerm) {
+                    renderInventoryTable();
+                    return;
+                }
+                
+                const filteredData = inventoryData.filter(item => 
+                    item.name.toLowerCase().includes(searchTerm)
+                );
+                
+                renderInventoryTable(filteredData);
+            });
+            
+            // 生成报表
+            document.getElementById('generateReportBtn').addEventListener('click', function() {
+                const sales = parseFloat(document.getElementById('monthlySales').value) || 0;
+                const expenses = parseFloat(document.getElementById('monthlyExpenses').value) || 0;
+                const profit = sales - expenses;
+                
+                const ctx = document.getElementById('reportChart').getContext('2d');
+                
+                if (window.reportChart) {
+                    window.reportChart.destroy();
+                }
+                
+                window.reportChart = new Chart(ctx, {
+                    type: 'bar',
+                    data: {
+                        labels: ['销售额', '支出', '利润'],
+                        datasets: [{
+                            label: '金额(元)',
+                            data: [sales, expenses, profit],
+                            backgroundColor: [
+                                'rgba(54, 162, 235, 0.6)',
+                                'rgba(255, 99, 132, 0.6)',
+                                profit >= 0 ? 'rgba(75, 192, 192, 0.6)' : 'rgba(255, 159, 64, 0.6)'
+                            ],
+                            borderColor: [
+                                'rgba(54, 162, 235, 1)',
+                                'rgba(255, 99, 132, 1)',
+                                profit >= 0 ? 'rgba(75, 192, 192, 1)' : 'rgba(255, 159, 64, 1)'
+                            ],
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        scales: {
+                            y: {
+                                beginAtZero: true
+                            }
+                        }
+                    }
+                });
+            });
+            
+            // 分享功能
+            document.getElementById('shareBtn').addEventListener('click', function() {
+                alert('分享链接已生成：\n\nhttps://example.com/inventory/share/123456\n\n此链接仅供查看，不可编辑。');
+            });
+            
+            // 报表类型切换
+            document.getElementById('monthlyReportBtn').addEventListener('click', function() {
+                alert('月报数据已生成！');
+            });
+            
+            document.getElementById('quarterlyReportBtn').addEventListener('click', function() {
+                alert('季报数据已生成！');
+            });
+            
+            document.getElementById('annualReportBtn').addEventListener('click', function() {
+                alert('年报数据已生成！');
+            });
+            
+            // 产品选择变化时更新自定义阈值输入框
+            document.getElementById('productSelect').addEventListener('change', function() {
+                const productId = parseInt(this.value);
+                if (isNaN(productId)) {
+                    document.getElementById('customWarningThreshold').value = '';
+                    return;
+                }
+                
+                const product = inventoryData.find(item => item.id === productId);
+                if (product) {
+                    document.getElementById('customWarningThreshold').value = product.warningThreshold;
+                }
+            });
+        });
+        
+        // 更新产品选择下拉框
+        function updateProductSelect() {
+            const productSelect = document.getElementById('productSelect');
+            productSelect.innerHTML = '<option value="">-- 选择产品 --</option>';
+            
+            inventoryData.forEach(item => {
+                const option = document.createElement('option');
+                option.value = item.id;
+                option.textContent = item.name;
+                productSelect.appendChild(option);
+            });
+        }
+        
+        // 更新告警阈值文本
+        function updateWarningThresholdText() {
+            document.getElementById('warningThresholdText').textContent = `(库存低于${systemSettings.defaultWarningThreshold}件)`;
+        }
+        
+        // 渲染库存表格
+        function renderInventoryTable(data = inventoryData) {
+            const tableBody = document.getElementById('inventoryTable');
+            tableBody.innerHTML = '';
+            
+            data.forEach(item => {
+                const productionDate = new Date(item.productionDate);
+                const expiryDate = new Date(productionDate);
+                expiryDate.setDate(productionDate.getDate() + item.shelfLife);
+                
+                const isLowStock = item.quantity < item.warningThreshold;
+                
+                const row = document.createElement('tr');
+                row.className = isLowStock ? 'low-stock' : '';
+                row.innerHTML = `
+                    <td class="py-2 px-4">${item.name}</td>
+                    <td class="py-2 px-4">${item.price.toFixed(2)}</td>
+                    <td class="py-2 px-4">${item.quantity}</td>
+                    <td class="py-2 px-4">${item.productionDate}</td>
+                    <td class="py-2 px-4">${expiryDate.toISOString().split('T')[0]}</td>
+                    <td class="py-2 px-4">${isLowStock ? '库存告急' : '正常'}</td>
+                    <td class="py-2 px-4">
+                        <button onclick="deleteProduct(${item.id})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+        
+        // 渲染预警表格
+        function renderWarningTable() {
+            const warningTable = document.getElementById('warningTable');
+            warningTable.innerHTML = '';
+            
+            const lowStockItems = inventoryData.filter(item => item.quantity < item.warningThreshold);
+            
+            if (lowStockItems.length === 0) {
+                const row = document.createElement('tr');
+                row.innerHTML = `
+                    <td colspan="5" class="py-4 px-4 text-center text-gray-500">暂无库存预警</td>
+                `;
+                warningTable.appendChild(row);
+                return;
+            }
+            
+            lowStockItems.forEach(item => {
+                const row = document.createElement('tr');
+                row.className = 'low-stock';
+                row.innerHTML = `
+                    <td class="py-2 px-4">${item.name}</td>
+                    <td class="py-2 px-4">${item.quantity}</td>
+                    <td class="py-2 px-4">${item.warningThreshold}</td>
+                    <td class="py-2 px-4">${Math.max(item.warningThreshold * 2 - item.quantity, item.warningThreshold)}</td>
+                    <td class="py-2 px-4">
+                        <button onclick="deleteProduct(${item.id})" class="text-red-500 hover:text-red-700">
+                            <i class="fas fa-trash-alt"></i>
+                        </button>
+                    </td>
+                `;
+                warningTable.appendChild(row);
+            });
+        }
+        
+        // 删除产品功能
+        function deleteProduct(id) {
+            if (confirm('确定要删除这个产品吗？此操作不可撤销！')) {
+                inventoryData = inventoryData.filter(item => item.id !== id);
+                renderInventoryTable();
+                renderWarningTable();
+                updateProductSelect();
+                alert('产品已删除！');
+            }
+        }
+    </script>
+</body>
+</html>
